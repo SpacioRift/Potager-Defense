@@ -1,7 +1,7 @@
 <script setup>
-import { ENEMIES } from '../game/config.js'
-import { LEVELS } from '../game/levels.js'
-import { progress, isUnlocked } from '../progress.js'
+import { DEFENDERS, ENEMIES } from '../game/config.js'
+import { LEVELS, STAR_RULES } from '../game/levels.js'
+import { isUnlocked, isCleared, starsOf, totalStars } from '../progress.js'
 import { MUSIC_THEMES } from '../game/music.js'
 
 const themeName = (id) => MUSIC_THEMES.find((t) => t.id === id)?.name
@@ -10,6 +10,8 @@ defineEmits(['play', 'serre', 'menu'])
 
 // Insectes qui apparaissent dans un niveau (dans l'ordre d'arrivée)
 const enemiesOf = (level) => [...new Set(level.waves.flatMap((w) => w.spawns))]
+
+const starsHelp = STAR_RULES.map((r) => `${'★'.repeat(r.stars)} ${r.label}`).join('\n')
 </script>
 
 <template>
@@ -17,6 +19,9 @@ const enemiesOf = (level) => [...new Set(level.waves.flatMap((w) => w.spawns))]
     <header>
       <h1>🗺️ Le jardin</h1>
       <p>Réussis un niveau pour débloquer le suivant.</p>
+      <p class="total" :title="starsHelp">
+        <span class="gold">★</span> {{ totalStars() }} / {{ LEVELS.length * 3 }}
+      </p>
     </header>
 
     <section class="list">
@@ -24,18 +29,18 @@ const enemiesOf = (level) => [...new Set(level.waves.flatMap((w) => w.spawns))]
         v-for="(level, i) in LEVELS"
         :key="level.id"
         class="level"
-        :class="{ locked: !isUnlocked(i), cleared: progress.cleared.includes(level.id), night: level.night }"
+        :class="{ locked: !isUnlocked(i), cleared: isCleared(level.id), night: level.night }"
         :disabled="!isUnlocked(i)"
         @click="$emit('play', i)"
       >
         <span class="num">{{ isUnlocked(i) ? i + 1 : '🔒' }}</span>
         <div class="body">
-          <strong>
-            {{ level.name }}
-            <span v-if="progress.cleared.includes(level.id)" title="Réussi">✅</span>
-          </strong>
+          <strong>{{ level.name }}</strong>
           <small>{{ level.desc }}</small>
           <div class="meta">
+            <span v-if="level.unlocks" class="unlock" :class="{ done: isCleared(level.id) }" title="Plante débloquée par ce niveau">
+              Débloque {{ DEFENDERS[level.unlocks].emoji }} {{ DEFENDERS[level.unlocks].name }}
+            </span>
             <span class="enemies">
               <span v-for="type in enemiesOf(level)" :key="type" :title="ENEMIES[type].name">{{ ENEMIES[type].emoji }}</span>
             </span>
@@ -44,6 +49,9 @@ const enemiesOf = (level) => [...new Set(level.waves.flatMap((w) => w.spawns))]
             <span class="theme" title="Musique du niveau">🎵 {{ themeName(level.music) }}</span>
           </div>
         </div>
+        <span v-if="isUnlocked(i)" class="stars" :title="starsHelp">
+          <span v-for="n in 3" :key="n" :class="{ gold: n <= starsOf(level.id) }">★</span>
+        </span>
       </button>
     </section>
 
@@ -136,7 +144,8 @@ header p {
 }
 .meta {
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 6px 14px;
   align-items: center;
   margin-top: 4px;
   font-weight: 700;
@@ -145,6 +154,31 @@ header p {
 .meta .theme {
   font-weight: 400;
   opacity: 0.75;
+}
+.total {
+  margin-top: 10px;
+  font-size: 1.2rem;
+  font-weight: 800;
+  opacity: 1;
+}
+.stars {
+  flex: none;
+  font-size: 1.6rem;
+  letter-spacing: 2px;
+  color: rgba(62, 42, 28, 0.2);
+}
+.gold {
+  color: #ffb300;
+  text-shadow: 0 1px 0 #c67c00;
+}
+.unlock {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 179, 0, 0.25);
+  font-weight: 700;
+}
+.unlock.done {
+  background: rgba(124, 179, 66, 0.25);
 }
 .enemies {
   display: flex;

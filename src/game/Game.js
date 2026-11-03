@@ -14,8 +14,11 @@ const cellCenter = (row, col) => ({ x: BOARD_X + col * CELL + CELL / 2, y: row *
  * Communique avec Vue uniquement via l'objet réactif `ui`.
  */
 export class Game {
-  /** @param defs stats des défenseurs, améliorations du joueur déjà appliquées */
-  constructor(canvas, ui, level, defs) {
+  /**
+   * @param defs stats des défenseurs, améliorations du joueur déjà appliquées
+   * @param available plantes débloquées, seules plantables dans cette partie
+   */
+  constructor(canvas, ui, level, defs, available = Object.keys(defs)) {
     this.canvas = canvas
     this.ctx = canvas.getContext('2d')
     canvas.width = WIDTH
@@ -24,6 +27,7 @@ export class Game {
     this.ui = ui
     this.level = level
     this.defs = defs
+    this.available = available
     this.finalAt = level.waves.at(-1).at
     this.lanes = level.lanes ?? Array.from({ length: ROWS }, (_, r) => r)
 
@@ -47,6 +51,7 @@ export class Game {
     this.hover = null
     this.cooldowns = Object.fromEntries(Object.keys(defs).map((k) => [k, 0]))
     this.planted = Object.fromEntries(Object.keys(defs).map((k) => [k, 0]))
+    this.lost = 0 // plantes dévorées (compte pour les étoiles)
     this.decor = Array.from({ length: 14 }, () => ({
       x: rand(BOARD_X + BOARD_W + 10, WIDTH - 10),
       y: rand(10, HEIGHT - 10),
@@ -198,7 +203,7 @@ export class Game {
   // ---------------------------------------------------------------- défenseurs
 
   canPlant(type) {
-    return this.ui.dew >= this.defs[type].cost && this.cooldowns[type] <= 0
+    return this.available.includes(type) && this.ui.dew >= this.defs[type].cost && this.cooldowns[type] <= 0
   }
 
   plant(type, row, col) {
@@ -229,6 +234,7 @@ export class Game {
   /** Plante dévorée par un insecte */
   destroyDefender(d) {
     this.removeDefender(d)
+    this.lost++
     play('plantLost')
     this.burst(d.x, d.y, { n: 6, emoji: '🍃', speed: [60, 160], up: 120, life: [0.6, 1], size: [18, 26] })
     this.burst(d.x, d.y, { n: 10, colors: ['#558b2f', '#7cb342', '#33691e'], speed: [60, 180], up: 100 })

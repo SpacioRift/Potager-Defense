@@ -1,7 +1,11 @@
 <script setup>
 import { DEFENDERS, DEFENDER_ORDER } from '../game/config.js'
 import { MAX_LEVEL, PLANT_UPGRADES, UPGRADES, buildDefender } from '../game/upgrades.js'
-import { progress, levelOf, plantLevel, upgradeCost, buyUpgrade, resetProgress } from '../progress.js'
+import {
+  progress, levelOf, plantLevel, upgradeCost, buyUpgrade, resetProgress, isPlantUnlocked, unlockLevelIndex,
+} from '../progress.js'
+import { LEVELS } from '../game/levels.js'
+import SaveTransfer from './SaveTransfer.vue'
 
 defineEmits(['play', 'menu'])
 
@@ -15,7 +19,7 @@ function values(type, key) {
 }
 
 function reset() {
-  if (confirm('Effacer toutes les graines et améliorations ?')) resetProgress()
+  if (confirm('Effacer toutes les graines, améliorations et étoiles ?')) resetProgress()
 }
 </script>
 
@@ -27,7 +31,17 @@ function reset() {
     </header>
 
     <section class="plants">
-      <article v-for="type in DEFENDER_ORDER" :key="type" class="plant">
+      <article v-for="type in DEFENDER_ORDER" :key="type" class="plant" :class="{ locked: !isPlantUnlocked(type) }">
+        <div v-if="!isPlantUnlocked(type)" class="lock-info">
+          <span class="ico">🔒</span>
+          <div>
+            <strong>{{ DEFENDERS[type].emoji }} {{ DEFENDERS[type].name }}</strong>
+            <small>
+              Réussis le niveau {{ unlockLevelIndex(type) + 1 }} ({{ LEVELS[unlockLevelIndex(type)].name }}) pour la débloquer.
+            </small>
+          </div>
+        </div>
+        <template v-else>
         <div class="head">
           <span class="ico">{{ DEFENDERS[type].emoji }}</span>
           <div class="title">
@@ -59,8 +73,11 @@ function reset() {
           </button>
           <span v-else class="max">MAX</span>
         </div>
+        </template>
       </article>
     </section>
+
+    <SaveTransfer />
 
     <footer>
       <button class="btn big" @click="$emit('play')">Jouer</button>
@@ -100,6 +117,21 @@ header p {
   border: 3px solid #c8b08a;
   border-radius: 14px;
   padding: 14px;
+}
+.plant.locked {
+  opacity: 0.75;
+  border-style: dashed;
+  display: flex;
+  align-items: center;
+}
+.lock-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.lock-info small {
+  display: block;
+  opacity: 0.8;
 }
 .head {
   display: flex;

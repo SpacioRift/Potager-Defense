@@ -2,9 +2,9 @@
 import { reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Game } from '../game/Game.js'
 import { DEFENDER_ORDER } from '../game/config.js'
-import { LEVELS } from '../game/levels.js'
+import { LEVELS, STAR_RULES, SEEDS_PER_NEW_STAR, starsFor } from '../game/levels.js'
 import { buildDefenders, computeRewards } from '../game/upgrades.js'
-import { progress, addSeeds, markCleared } from '../progress.js'
+import { progress, addSeeds, recordStars, unlockedPlants } from '../progress.js'
 import { play } from '../game/audio.js'
 import { startMusic, stopMusic, pauseMusic } from '../game/music.js'
 import SeedBar from './SeedBar.vue'
@@ -17,15 +17,16 @@ const hasNext = props.levelIndex < LEVELS.length - 1
 
 // Stats figées au lancement : acheter une amélioration n'affecte que la partie suivante
 const defs = buildDefenders(progress.upgrades)
+const available = unlockedPlants()
 const canvas = ref(null)
 const ui = reactive({
   dew: 0, selected: null, cooldowns: {}, status: 'playing', progress: 0, banner: '', paused: false, speed: 1,
 })
-const rewards = ref(null)
+const result = ref(null) // bilan de fin de partie
 let game = null
 
 onMounted(() => {
-  game = new Game(canvas.value, ui, level, defs)
+  game = new Game(canvas.value, ui, level, defs, available)
   game.start()
   game.showBanner(`Niveau ${props.levelIndex + 1} · ${level.name}`)
   startMusic(level.music)
@@ -47,9 +48,22 @@ watch(
     if (status === 'playing') return
     stopMusic()
     play(status === 'won' ? 'win' : 'lose')
-    rewards.value = computeRewards(status === 'won', game.planted, level.seeds)
-    addSeeds(rewards.value)
-    if (status === 'won') markCleared(level.id)
+    const won = status === 'won'
+    const stars = won ? starsFor(game.lost) : 0
+    const newStars = won ? recordStars(level.id, stars) : 0
+    const rewards = computeRewards(won, game.planted, available, {
+      winSeeds: level.seeds,
+      starBonus: newStars * SEEDS_PER_NEW_STAR,
+    })
+    addSeeds(rewards)
+    result.value = {
+      rewards,
+      stars,
+      newStars,
+      lost: game.lost,
+      rule: STAR_RULES.find((r) => r.stars === stars)?.label,
+      newPlant: won && level.unlocks && !available.includes(level.unlocks) ? level.unlocks : null,
+    }
   },
 )
 
@@ -75,6 +89,7 @@ function onKey(e) {
     <SeedBar
       :ui="ui"
       :defs="defs"
+      :available="available"
       @select="select"
       @pause="ui.paused = !ui.paused"
       @speed="ui.speed = ui.speed === 1 ? 2 : 1"
@@ -101,14 +116,32 @@ function onKey(e) {
 
       <div v-if="ui.status !== 'playing'" class="overlay">
         <h2>{{ ui.status === 'won' ? '🏆 Potager sauvé !' : '🐛 Les insectes ont tout mangé…' }}</h2>
-        <div v-if="rewards" class="rewards">
-          <span class="label">Graines récoltées</span>
-          <div class="list">
-            <span v-for="type in DEFENDER_ORDER" :key="type" class="reward">
-              {{ defs[type].emoji }} <strong>+{{ rewards[type] }}</strong> 🌱
-            </span>
+        <template v-if="result">
+          <div v-if="ui.status === 'won'" class="stars">
+            <span v-for="n in 3" :key="n" class="star" :class="{ on: n <= result.stars }" :style="{ animationDelay: `${n * 0.25}s` }">★</span>
           </div>
-        </div>
+          <p v-if="ui.status === 'won'" class="star-info">
+            {{ result.rule }}
+            <template v-if="result.lost">
+              · {{ result.lost }} plante{{ result.lost > 1 ? 's' : '' }} dévorée{{ result.lost > 1 ? 's' : '' }}
+            </template>
+            <strong v-if="result.newStars">
+              <br />+{{ result.newStars }} nouvelle{{ result.newStars > 1 ? 's' : '' }} étoile{{ result.newStars > 1 ? 's' : '' }} :
+              +{{ result.newStars * SEEDS_PER_NEW_STAR }} 🌱 par plante
+            </strong>
+          </p>
+          <div v-if="result.newPlant" class="unlock">
+            🎉 Nouvelle plante débloquée : {{ defs[result.newPlant].emoji }} <strong>{{ defs[result.newPlant].name }}</strong>
+          </div>
+          <div class="rewards">
+            <span class="label">Graines récoltées</span>
+            <div class="list">
+              <span v-for="type in DEFENDER_ORDER.filter((t) => t in result.rewards)" :key="type" class="reward">
+                {{ defs[type].emoji }} <strong>+{{ result.rewards[type] }}</strong> 🌱
+              </span>
+            </div>
+          </div>
+        </template>
         <div class="actions">
           <button v-if="ui.status === 'won' && hasNext" class="btn" @click="emit('next')">Niveau suivant ▶</button>
           <button class="btn" @click="emit('serre')">🌱 Améliorer</button>
@@ -167,8 +200,9 @@ canvas {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: safe center;
+  overflow-y: auto;
+  gap: 10px;
   background: rgba(20, 30, 10, 0.72);
   line-height: 1.2;
   padding: 16px;
@@ -176,6 +210,37 @@ canvas {
 .overlay h2 {
   font-size: clamp(1.4rem, 4vw, 2.4rem);
   margin: 0 0 8px;
+}
+.stars {
+  display: flex;
+  gap: 8px;
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  line-height: 1;
+}
+.star {
+  color: rgba(255, 255, 255, 0.2);
+  animation: star-pop 0.4s backwards;
+}
+.star.on {
+  color: #ffd54f;
+  text-shadow: 0 0 16px rgba(255, 213, 79, 0.7);
+}
+@keyframes star-pop {
+  from {
+    transform: scale(0) rotate(-90deg);
+    opacity: 0;
+  }
+}
+.star-info {
+  margin: 0;
+  text-align: center;
+  opacity: 0.9;
+}
+.unlock {
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 213, 79, 0.2);
+  border: 2px solid #ffd54f;
 }
 .rewards {
   text-align: center;

@@ -73,14 +73,15 @@ export function buildDefenders(upgrades) {
 }
 
 /**
- * Graines gagnées en fin de partie, par plante :
- * une base pour toutes (`winSeeds` du niveau en cas de victoire, 1 sinon) + 1 par tranche de 2 plantations (max +5).
+ * Graines gagnées en fin de partie, pour chaque plante débloquée (`plants`) :
+ * une base (`winSeeds` du niveau en cas de victoire, 1 sinon) + 1 par tranche de 2 plantations (max +5)
+ * + `starBonus` (graines des nouvelles étoiles).
  */
-export function computeRewards(won, planted, winSeeds = 3) {
+export function computeRewards(won, planted, plants, { winSeeds = 3, starBonus = 0 } = {}) {
   return Object.fromEntries(
-    Object.keys(DEFENDERS).map((type) => [
+    plants.map((type) => [
       type,
-      (won ? winSeeds : 1) + Math.min(5, Math.floor((planted[type] || 0) / 2)),
+      (won ? winSeeds : 1) + Math.min(5, Math.floor((planted[type] || 0) / 2)) + starBonus,
     ]),
   )
 }

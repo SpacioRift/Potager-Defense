@@ -1,7 +1,7 @@
 <script setup>
 import { DEFENDER_ORDER } from '../game/config.js'
 import { reactive } from 'vue'
-import { plantLevel } from '../progress.js'
+import { plantLevel, unlockLevelIndex } from '../progress.js'
 import { getAudioSettings, setSfx } from '../game/audio.js'
 import { setMusic } from '../game/music.js'
 
@@ -14,11 +14,19 @@ function toggle(key) {
 const props = defineProps({
   ui: { type: Object, required: true },
   defs: { type: Object, required: true },
+  available: { type: Array, required: true }, // plantes débloquées
 })
 defineEmits(['select', 'pause', 'speed'])
 
 const cooldown = (type) => props.ui.cooldowns[type] || 0
-const ready = (type) => props.ui.dew >= props.defs[type].cost && cooldown(type) === 0
+const locked = (type) => !props.available.includes(type)
+const ready = (type) => !locked(type) && props.ui.dew >= props.defs[type].cost && cooldown(type) === 0
+
+function cardTitle(type, i) {
+  const def = props.defs[type]
+  if (locked(type)) return `${def.name} — à débloquer en réussissant le niveau ${unlockLevelIndex(type) + 1}`
+  return `${def.name} — ${def.desc} (${i + 1})`
+}
 </script>
 
 <template>
@@ -29,14 +37,20 @@ const ready = (type) => props.ui.dew >= props.defs[type].cost && cooldown(type) 
       v-for="(type, i) in DEFENDER_ORDER"
       :key="type"
       class="card"
-      :class="{ selected: ui.selected === type, disabled: !ready(type) }"
-      :title="`${defs[type].name} — ${defs[type].desc} (${i + 1})`"
+      :class="{ selected: ui.selected === type, disabled: !ready(type), locked: locked(type) }"
+      :title="cardTitle(type, i)"
       @click="$emit('select', type)"
     >
-      <span class="lvl">{{ plantLevel(type) }}</span>
-      <span class="emoji">{{ defs[type].emoji }}</span>
-      <span class="cost">{{ defs[type].cost }}</span>
-      <span class="cd" :style="{ height: cooldown(type) * 100 + '%' }" />
+      <template v-if="locked(type)">
+        <span class="emoji">🔒</span>
+        <span class="cost">Niv. {{ unlockLevelIndex(type) + 1 }}</span>
+      </template>
+      <template v-else>
+        <span class="lvl">{{ plantLevel(type) }}</span>
+        <span class="emoji">{{ defs[type].emoji }}</span>
+        <span class="cost">{{ defs[type].cost }}</span>
+        <span class="cd" :style="{ height: cooldown(type) * 100 + '%' }" />
+      </template>
     </button>
 
     <button
@@ -109,6 +123,13 @@ const ready = (type) => props.ui.dew >= props.defs[type].cost && cooldown(type) 
 }
 .card.disabled {
   filter: grayscale(0.7) brightness(0.75);
+}
+.card.locked {
+  cursor: not-allowed;
+  background: #d7c9ad;
+}
+.card.locked .emoji {
+  font-size: 1.5rem;
 }
 .emoji {
   font-size: 2rem;

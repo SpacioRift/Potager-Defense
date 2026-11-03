@@ -15,6 +15,7 @@ const w = (at, spec, big = false) => ({
 //   night    : pas de rosée tombée du ciel, plateau assombri
 //   seeds    : graines gagnées par plante en cas de victoire
 //   music    : id du thème musical (themes.js)
+//   unlocks  : plante débloquée en réussissant ce niveau
 export const LEVELS = [
   {
     id: 'pousses',
@@ -22,6 +23,7 @@ export const LEVELS = [
     desc: 'Trois rangées et quelques limaces : idéal pour débuter.',
     lanes: [1, 2, 3],
     music: 'matin',
+    unlocks: 'citrouille',
     startDew: 150,
     seeds: 2,
     waves: [
@@ -40,6 +42,7 @@ export const LEVELS = [
     name: 'Le potager du matin',
     desc: 'Tout le jardin est ouvert. Attention aux scarabées.',
     music: 'matin',
+    unlocks: 'piment',
     startDew: 150,
     seeds: 3,
     waves: [
@@ -120,3 +123,18 @@ export const LEVELS = [
     ],
   },
 ]
+
+// Étoiles d'une victoire, selon le nombre de plantes dévorées par les insectes
+// (la pelle et l'explosion du piment ne comptent pas).
+export const STAR_RULES = [
+  { stars: 3, maxLost: 0, label: 'Aucune plante dévorée' },
+  { stars: 2, maxLost: 3, label: 'Au plus 3 plantes dévorées' },
+  { stars: 1, maxLost: Infinity, label: 'Potager sauvé' },
+]
+export const starsFor = (lost) => STAR_RULES.find((r) => lost <= r.maxLost).stars
+
+// Graines bonus (par plante débloquée) pour chaque nouvelle étoile obtenue
+export const SEEDS_PER_NEW_STAR = 2
+
+// Plantes disponibles dès le départ ; les autres se débloquent via `unlocks`
+export const STARTER_PLANTS = ['rosee', 'tomate']
